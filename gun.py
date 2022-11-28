@@ -1,33 +1,37 @@
 import math
 from random import choice
-
+from random import randint as rnd
 import pygame
 
 
-FPS = 30
+FPS = 60 #кадры в секунду
 
 RED = (255, 0, 0)
-BLUE = 0x0000FF
-YELLOW = 0xFFC91F
-GREEN = 0x00FF00
-MAGENTA = 0xFF03B8
-CYAN = 0x00FFCC
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+GREEN = (144, 238, 144)
+MAGENTA = (255, 0, 255 )
+CYAN = (0, 255, 255)
 BLACK = (0, 0, 0)
-WHITE = 0xFFFFFF
-GREY = (150, 150, 150)
-GAME_COLORS = [RED, BLUE, YELLOW, GREEN, MAGENTA, CYAN]
+WHITE = (255, 255, 255)
+GREY = (100, 100, 100)
+GAME_COLORS = [RED, BLUE, YELLOW, GREEN, MAGENTA, CYAN] #доступные цвета в игре
 
 WIDTH = 800
 HEIGHT = 600
-
-
-class Ball:
+g  = 1 #ускорение свободного падения
+k  = 0.2 #коэффициэнт потерь скорости при столкновении
+mu = 0.15 #коэффициэнт потерь скорости по ортогональной оси при столкновении
+class Ball: #снаряд
     def __init__(self, screen: pygame.Surface, x=40, y=450):
         """ Конструктор класса ball
 
         Args:
         x - начальное положение мяча по горизонтали
         y - начальное положение мяча по вертикали
+        r - размер снаряда
+        vx, vy - проекции скоростей
+        lifetime - время жизни
         """
         self.screen = screen
         self.x = x
@@ -36,7 +40,8 @@ class Ball:
         self.vx = 0
         self.vy = 0
         self.color = choice(GAME_COLORS)
-        self.live = 30
+        #self.live = 30
+        self.lifetime = 500
 
     def move(self):
         """Переместить мяч по прошествии единицы времени.
@@ -45,10 +50,25 @@ class Ball:
         self.x и self.y с учетом скоростей self.vx и self.vy, силы гравитации, действующей на мяч,
         и стен по краям окна (размер окна 800х600).
         """
-        # FIXME
         self.x += self.vx
-        self.y -= self.vy
-
+        self.y -= self.vy #движение
+        self.vy -= g #действие гравитации
+        self.lifetime -= 1 #таймер жизни
+        if self.lifetime < 0:
+        	balls.remove(self)
+        if self.x + self.r > WIDTH: # столкновение справа
+        	self.x = 2*WIDTH - self.x - self.r
+        	self.vx = -self.vx*(1-k)
+        	self.vy= self.vy*(1-mu)
+        if self.y + self.r > HEIGHT: #столкновение снизу
+        	if self.vy*self.vy < 5: # остановка
+        		self.vy = 0
+        		self.y = HEIGHT - self.r
+        	else:
+        		self.y = 2*HEIGHT - self.y - self.r
+        		self.vy = -self.vy*(1-k)
+        		self.vx= self.vx*(1-mu)
+        	
     def draw(self):
         pygame.draw.circle(
             self.screen,
@@ -65,8 +85,12 @@ class Ball:
         Returns:
             Возвращает True в случае столкновения мяча и цели. В противном случае возвращает False.
         """
-        # FIXME
-        return False
+        if ((obj.x)-(self.x))**2 + ((obj.y)-(self.y))**2 <= (self.r + obj.r)**2:
+            balls.remove(self)
+            return True
+        else:
+            return False
+
 
 
 class Gun:
@@ -74,8 +98,12 @@ class Gun:
         self.screen = screen
         self.f2_power = 10
         self.f2_on = 0
-        self.an = 1
+        self.an = 0
         self.color = GREY
+        self.x = 20
+        self.y = 400
+        self.leng = 30+self.f2_power//1.25 
+        
     def real_angle(self):
         x_mouse, y_mouse = pygame.mouse.get_pos()
         self.an = math.atan2((y_mouse - 450), (x_mouse - 40))
@@ -99,6 +127,7 @@ class Gun:
         self.f2_on = 0
         self.f2_power = 10
 
+
     def targetting(self, event):
         """Прицеливание. Зависит от положения мыши."""
         if self.f2_on:
@@ -107,20 +136,16 @@ class Gun:
             self.color = GREY
 
 
-    def draw(self):
-        surf = pygame.Surface((50, 10), pygame.SRCALPHA)
-        surf.fill((0,255,0))
-        pygame.draw.rect(surf, GREY, (0, 0, 50, 10))
-        surf = pygame.transform.rotate(surf, self.an * -180 / math.pi)
-        screen.blit(surf, (40, 445))
-
-
-
-
-
-
-
-
+    def draw(self): 
+        rectangle_surface = pygame.Surface((WIDTH, HEIGHT))
+        rectangle_surface.fill((255, 255, 255))
+        old_center = rectangle_surface.get_rect().center
+        pygame.draw.rect(rectangle_surface, self.color, pygame.Rect(WIDTH//2, HEIGHT//2, self.leng+self.f2_power/2, 10))
+        rectangle_surface = pygame.transform.rotate(rectangle_surface, -self.an * 180 / math.pi)
+        rect = rectangle_surface.get_rect()
+        rect.center = (old_center[0] + self.x - WIDTH//2, old_center[1] + self.y - HEIGHT//2)
+        self.screen.blit(rectangle_surface, rect)
+        
 
     def power_up(self):
         if self.f2_on:
@@ -132,10 +157,14 @@ class Gun:
 
 
 class Target:
-    # self.points = 0
-    # self.live = 1
-    # FIXME: don't work!!! How to call this functions when object is created?
-    # self.new_target()
+    def __init__(self, screen):
+    	self.screen = screen
+    	self.x = rnd(600, 780) # координаты
+    	self.y = rnd(300, 550)
+    	self.r = rnd(2, 50)
+    	self.color = RED 
+    	self.live = True # проверка жизни
+    	self.points = 0 # количество очков
 
     def new_target(self):
         """ Инициализация новой цели. """
@@ -143,13 +172,14 @@ class Target:
         y = self.y = rnd(300, 550)
         r = self.r = rnd(2, 50)
         color = self.color = RED
-
+        self.points += 1
+        target.live = 1
     def hit(self, points=1):
         """Попадание шарика в цель."""
         self.points += points
 
     def draw(self):
-        ...
+        pygame.draw.circle(self.screen, self.color, (self.x, self.y), self.r)
 
 
 pygame.init()
@@ -159,7 +189,7 @@ balls = []
 
 clock = pygame.time.Clock()
 gun = Gun(screen)
-target = Target()
+target = Target(screen)
 finished = False
 
 while not finished:
